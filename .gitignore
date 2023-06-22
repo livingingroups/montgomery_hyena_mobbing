@@ -3,4 +3,5 @@
 *.doc
 *.pdf
 00.raw_data
+.RData
 
