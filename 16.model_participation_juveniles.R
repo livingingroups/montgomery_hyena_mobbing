@@ -14,6 +14,7 @@ library(multcomp)
 library(DHARMa)
 library(see)
 library(performance)
+library(broom.mixed)
 library(viridis)
 library(sjPlot)
 library(patchwork)
@@ -171,13 +172,13 @@ summary(mod.juv)
 # sexm:stan.age  -0.7127     0.4303  -1.656   0.0977 .  
 check_collinearity(mod.juv)   #all below 3
 check_model(mod.juv)
-binned_residuals(mod.juv)
-# Warning: Probably bad model fit. Only about 18% of the residuals are inside the error bounds.
 simulationOutput <- simulateResiduals(fittedModel = mod.juv, n = 250)
-plot(simulationOutput)   #KS test: p = 0.00137, Dispersion test: p = 0.208, Outlier test: p = 1
+plot(simulationOutput)
 model_performance(mod.juv)
-# AIC     |     BIC | R2 (cond.) | R2 (marg.) |   ICC |  RMSE | Sigma | Log_loss |
-# 795.042 | 835.443 |      0.722 |      0.178 | 0.662 | 0.227 | 1.000 |    0.178 |
+# AIC     |    AICc |     BIC | R2 (cond.) | R2 (marg.) |   ICC |  RMSE | Sigma | Log_loss | Score_log | Score_spherical
+# ----------------------------------------------------------------------------------------------------------------------
+# 795.042 | 795.168 | 835.443 |      0.722 |      0.178 | 0.662 | 0.227 | 1.000 |    0.178 |      -Inf |           0.015
+
 
 ##### Plot models #####
 
@@ -283,22 +284,35 @@ mod.juv <- glmmTMB(mobber ~ stan.age + sex + grt_occ + (1 | session/mobID) + (1 
 summary(mod.juv)
 set_theme(base = theme_classic(), axis.textcolor = "black", axis.title.color = "black", 
           axis.textsize.y = 1.5, axis.textsize.x = 1.2, axis.title.size = 1.7)
-plot.model <- plot_model(mod.juv, type = "est", transform = NULL,
+plot.model <- plot_model(mod.juv, type = "est", transform = "exp",
                          axis.labels = c("Age x Sex", "Greeted [TRUE]",
                                          "Sex [male]", "Age"),
                          vline.color = "black", title = "", dot.size = 4.5, line.size = 1.5,
                          show.values = TRUE, show.p = TRUE, digits = 2, value.offset = 0.3, 
-                         value.size = 6, colors = viridis_2, axis.lim = c(-3,3))
+                         value.size = 6, colors = viridis_2, axis.lim = c(0.01,100))
 pdf('16.plot.juv.model.pdf', width = 7, height = 5)
 plot.model
 dev.off()
 
 #Table
-sjPlot::tab_model(mod.juv, show.se = T, show.ci = F, show.re.var = F, show.intercept = F, 
+sjPlot::tab_model(mod.juv, show.se = T, show.ci = 0.95, show.re.var = F, show.intercept = F, 
                   pred.labels = c("Age", "Sex [male]", "Greeted [TRUE]",
                                   "Age x Sex"),
                   dv.labels = c("Probability of mobbing participation"), 
-                  string.se = "SE", transform = NULL, file = "16.table_juv.doc")
+                  string.se = "SE", transform = "exp", file = "16.table_juv.doc")
+
+#Calculate CIs using the likelihood profile
+tidy.mod.juv <- broom.mixed::tidy(mod.juv, conf.method = "profile",
+                                  conf.int = T, conf.level = 0.95, exponentiate = T)
+tidy.mod.juv
+#   effect   component group         term           estimate std.error statistic     p.value conf.low conf.high
+# 2 fixed    cond      NA            stan.age          5.75      1.92       5.24   1.58e-7   3.16      12.0  
+# 3 fixed    cond      NA            sexm              0.701     0.273     -0.912  3.62e-1   0.317      1.51 
+# 4 fixed    cond      NA            grt_occTRUE       3.21      2.45       1.53   1.25e-1   0.710     14.7  
+# 5 fixed    cond      NA            stan.age:sexm     0.490     0.211     -1.66   9.77e-2   0.202      1.13 
+# 6 ran_pars cond      mobID:session sd__(Intercept)   1.08     NA         NA     NA        -0.803      0.610
+# 7 ran_pars cond      session       sd__(Intercept)   1.88     NA         NA     NA         0.151      1.03 
+# 8 ran_pars cond      hyena         sd__(Intercept)   1.32     NA         NA     NA        -0.188      0.703
 
 
 

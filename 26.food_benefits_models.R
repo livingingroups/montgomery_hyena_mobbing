@@ -14,6 +14,7 @@ library(multcomp)
 library(DHARMa)
 library(see)
 library(performance)
+library(broom.mixed)
 library(viridis)
 library(sjPlot)
 library(patchwork)
@@ -129,16 +130,12 @@ summary(mod.feeds)
 # stan.rank            0.4219     0.1540   2.740  0.00615 ** 
 check_collinearity(mod.feeds)    #all below 3
 check_model(mod.feeds) 
-binned_residuals(mod.feeds)
-# Warning: Probably bad model fit. Only about 59% of the residuals are inside the error bounds.
 simulationOutput <- simulateResiduals(fittedModel = mod.feeds, n = 250)
-plot(simulationOutput)   #KS test: p = 0.00803, Dispersion test: p = 0.504, Outlier test: p = 0.2187
+plot(simulationOutput)
 model_performance(mod.feeds)
-# AIC      |      BIC | R2 (cond.) | R2 (marg.) |   ICC |  RMSE | Sigma | Log_loss |
-# 1041.450 | 1076.139 |      0.519 |      0.082 | 0.476 | 0.334 | 1.000 |    0.364 |
-r2(mod.feeds)
-# Conditional R2: 0.519
-# Marginal R2: 0.082
+# AIC      |     AICc |      BIC | R2 (cond.) | R2 (marg.) |   ICC |  RMSE | Sigma | Log_loss | Score_log | Score_spherical
+# -------------------------------------------------------------------------------------------------------------------------
+# 1041.450 | 1041.558 | 1076.139 |      0.519 |      0.082 | 0.476 | 0.334 | 1.000 |    0.364 |      -Inf |           0.003
 
 ##### Plot model #####
 
@@ -229,22 +226,34 @@ summary(mod.feeds)
 # mobberTRUE   0.55898    0.20362   2.745  0.00605 ** 
 set_theme(base = theme_classic(), axis.textcolor = "black", axis.title.color = "black", 
           axis.textsize.y = 1.5, axis.textsize.x = 1.2, axis.title.size = 1.7)
-plot.model <- plot_model(mod.feeds, type = "est", transform = NULL,
+plot.model <- plot_model(mod.feeds, type = "est", transform = "exp",
                          axis.labels = c("Participant [TRUE]",
                                          "Social rank", "Age^2", "Age"),
                          vline.color = "black", title = "", dot.size = 4.5, line.size = 1.5,
                          show.values = TRUE, show.p = TRUE, digits = 2, value.offset = 0.3, 
-                         value.size = 6, colors = viridis_2, axis.lim = c(-2,2))
+                         value.size = 6, colors = viridis_2, axis.lim = c(0.1,10))
 pdf('26.plot.model.feeds.pdf', width = 7, height = 5)
 plot.model
 dev.off()
 
 #Table
-sjPlot::tab_model(mod.feeds, show.se = T, show.ci = F, show.re.var = F, show.intercept = F, 
+sjPlot::tab_model(mod.feeds, show.se = T, show.ci = 0.95, show.re.var = F, show.intercept = F, 
                   pred.labels = c("Age", "Age^2", "Social rank", 
                                   "Participant [TRUE]"),
                   dv.labels = c("Probability of feeding"), 
-                  string.se = "SE", transform = NULL, file = "26.table_feed.doc")
+                  string.se = "SE", transform = "exp", file = "26.table_feed.doc")
+
+#Calculate CIs using the likelihood profile
+tidy.mod.feeds <- broom.mixed::tidy(mod.feeds, conf.method = "profile",
+                                    conf.int = T, conf.level = 0.95, exponentiate = T)
+tidy.mod.feeds
+#   effect   component group   term            estimate std.error statistic     p.value conf.low conf.high
+# 2 fixed    cond      NA      stan.age           1.08     0.189      0.428  0.668       0.764      1.52 
+# 3 fixed    cond      NA      stan.age.sq        0.768    0.0727    -2.78   0.00539     0.624      0.911
+# 4 fixed    cond      NA      stan.rank          1.52     0.235      2.74   0.00615     1.13       2.09 
+# 5 fixed    cond      NA      mobberTRUE         1.75     0.356      2.75   0.00605     1.17       2.61 
+# 6 ran_pars cond      session sd__(Intercept)    1.10    NA         NA     NA          -0.276      0.454
+# 7 ran_pars cond      hyena   sd__(Intercept)    1.33    NA         NA     NA           0.0173     0.553
 
 
 ########## 26.4 Do mobbers feed? Analysis by session ##########
@@ -341,22 +350,25 @@ summary(mod.feeds)
 # stan.rank    0.24196    0.13319   1.817   0.0693 .
 check_collinearity(mod.feeds)    #all below 3
 check_model(mod.feeds) 
-binned_residuals(mod.feeds)
-# Warning: Probably bad model fit. Only about 77% of the residuals are inside the error bounds.
 simulationOutput <- simulateResiduals(fittedModel = mod.feeds, n = 250)
-plot(simulationOutput)   #KS test: p = 0.07512, Dispersion test: p = 0.976, Outlier test: p = 0.66427
+plot(simulationOutput)
 model_performance(mod.feeds)
-# AIC     |     BIC | R2 (cond.) | R2 (marg.) |   ICC |  RMSE | Sigma | Log_loss |
-# 782.416 | 800.462 |      0.409 |      0.048 | 0.379 | 0.395 | 1.000 |    0.479 |
-r2(mod.feeds)
-# Conditional R2: 0.409
-# Marginal R2: 0.082
+# AIC     |    AICc |     BIC | R2 (cond.) | R2 (marg.) |   ICC |  RMSE | Sigma | Log_loss | Score_log | Score_spherical
+# ----------------------------------------------------------------------------------------------------------------------
+# 782.416 | 782.475 | 800.462 |      0.409 |      0.048 | 0.379 | 0.395 | 1.000 |    0.479 |      -Inf |           0.004
 
 #Table
-sjPlot::tab_model(mod.feeds, show.se = T, show.ci = F, show.re.var = F, show.intercept = F, 
+sjPlot::tab_model(mod.feeds, show.se = T, show.ci = 0.95, show.re.var = F, show.intercept = F, 
                   pred.labels = c("Sex", "Social rank"),
                   dv.labels = c("Probability of feeding"), 
-                  string.se = "SE", transform = NULL, file = "26.table_feed_all.doc")
+                  string.se = "SE", transform = "exp", file = "26.table_feed_all.doc")
 
-
+#Calculate CIs using the likelihood profile
+tidy.mod.feeds <- broom.mixed::tidy(mod.feeds, conf.method = "profile",
+                                    conf.int = T, conf.level = 0.95, exponentiate = T)
+tidy.mod.feeds
+#   effect   component group   term            estimate std.error statistic     p.value conf.low conf.high
+# 2 fixed    cond      NA      sexm               0.517     0.136    -2.50   0.0125   0.306      0.863
+# 3 fixed    cond      NA      stan.rank          1.27      0.170     1.82   0.0693   0.982      1.66 
+# 4 ran_pars cond      session sd__(Intercept)    1.42     NA        NA     NA        0.0700     0.630
 

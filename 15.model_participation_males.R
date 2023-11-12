@@ -14,6 +14,7 @@ library(multcomp)
 library(DHARMa)
 library(see)
 library(performance)
+library(broom.mixed)
 library(viridis)
 library(sjPlot)
 library(patchwork)
@@ -175,13 +176,12 @@ summary(mod.male)
 # stan.rank            0.9743     0.2152   4.528 5.94e-06 ***
 check_collinearity(mod.male)    #all below 3
 check_model(mod.male)
-binned_residuals(mod.male)
-# Warning: Probably bad model fit. Only about 30% of the residuals are inside the error bounds.
 simulationOutput <- simulateResiduals(fittedModel = mod.male, n = 250)
-plot(simulationOutput)   #KS test: p = 0.02709, Dispersion test: p = 1, Outlier test: p = 1
+plot(simulationOutput)
 model_performance(mod.male)
-# AIC     |     BIC | R2 (cond.) | R2 (marg.) |   ICC |  RMSE | Sigma | Log_loss | 
-# 861.775 | 900.132 |      0.696 |      0.106 | 0.660 | 0.278 | 1.000 |    0.264 | 
+# AIC     |    AICc |     BIC | R2 (cond.) | R2 (marg.) |   ICC |  RMSE | Sigma | Log_loss | Score_log | Score_spherical
+# ----------------------------------------------------------------------------------------------------------------------
+# 861.775 | 861.938 | 900.132 |      0.696 |      0.106 | 0.660 | 0.278 | 1.000 |    0.264 |      -Inf |           0.009
 
 ##### Plot models #####
 
@@ -274,23 +274,35 @@ summary(mod.male)
 # stan.mob.ai.avg   0.3566     0.1780   2.003  0.04520 *  
 set_theme(base = theme_classic(), axis.textcolor = "black", axis.title.color = "black", 
           axis.textsize.y = 1.5, axis.textsize.x = 1.2, axis.title.size = 1.7)
-plot.model <- plot_model(mod.male, type = "est", transform = NULL,
+plot.model <- plot_model(mod.male, type = "est", transform = "exp",
                          axis.labels = c("Association index (participants)", 
                                          "Social rank", "Age^2", "Age"),
                          vline.color = "black", title = "", dot.size = 4.5, line.size = 1.5,
                          show.values = TRUE, show.p = TRUE, digits = 2, value.offset = 0.3, 
-                         value.size = 6, colors = viridis_2, axis.lim = c(-2,2))
+                         value.size = 6, colors = viridis_2, axis.lim = c(0.1,10))
 pdf('15.plot.male.model.pdf', width = 7, height = 5)
 plot.model
 dev.off()
 
 #Table
-sjPlot::tab_model(mod.male, show.se = T, show.ci = F, show.re.var = F, show.intercept = F, 
+sjPlot::tab_model(mod.male, show.se = T, show.ci = 0.95, show.re.var = F, show.intercept = F, 
                   pred.labels = c("Age", "Age^2", "Social rank", 
                                   "Association index (participants)"),
                   dv.labels = c("Probability of mobbing participation"), 
-                  string.se = "SE", transform = NULL, file = "15.table_male.doc")
+                  string.se = "SE", transform = "exp", file = "15.table_male.doc")
 
+#Calculate CIs using the likelihood profile
+tidy.mod.male <- broom.mixed::tidy(mod.male, conf.method = "profile",
+                                   conf.int = T, conf.level = 0.95, exponentiate = T)
+tidy.mod.male
+#   effect   component group         term            estimate std.error statistic     p.value conf.low conf.high
+# 2 fixed    cond      NA            stan.age           1.13      0.278     0.502  0.616         0.699     1.85 
+# 3 fixed    cond      NA            stan.age.sq        0.687     0.115    -2.24   0.0248        0.483     0.934
+# 4 fixed    cond      NA            stan.rank          2.65      0.570     4.53   0.00000594    1.77      4.15 
+# 5 fixed    cond      NA            stan.mob.ai.avg    1.43      0.254     2.00   0.0452        1.01      2.05 
+# 6 ran_pars cond      mobID:session sd__(Intercept)    1.30     NA        NA     NA            -0.203     0.620
+# 7 ran_pars cond      session       sd__(Intercept)    2.05     NA        NA     NA             0.362     1.05 
+# 8 ran_pars cond      hyena         sd__(Intercept)    0.722    NA        NA     NA            -1.31      0.192
 
 
 

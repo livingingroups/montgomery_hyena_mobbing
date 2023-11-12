@@ -14,6 +14,7 @@ library(multcomp)
 library(DHARMa)
 library(see)
 library(performance)
+library(broom.mixed)
 library(viridis)
 library(sjPlot)
 library(patchwork)
@@ -192,13 +193,12 @@ summary(mod.prob.mob)
 # male_lions_presentTRUE:stan.num_indv_grts  0.99175    0.44131   2.247   0.0246 *  
 check_collinearity(mod.prob.mob)
 check_model(mod.prob.mob)
-binned_residuals(mod.prob.mob)
-# Warning: About 87% of the residuals are inside the error bounds (~95% or higher would be good).
 simulationOutput <- simulateResiduals(fittedModel = mod.prob.mob, n = 250)
-plot(simulationOutput)   #KS test: p = 0.93486, Dispersion test: p = 0.696, Outlier test: p = 1
+plot(simulationOutput)
 model_performance(mod.prob.mob)
-# AIC     |     BIC |  RMSE | Sigma | Log_loss | Score_log | Score_spherical
-# 257.689 | 277.996 | 0.440 | 1.000 |    0.564 |   -66.789 |           0.014
+# AIC     |    AICc |     BIC | R2 (cond.) | R2 (marg.) |  RMSE | Sigma | Log_loss | Score_log | Score_spherical
+# --------------------------------------------------------------------------------------------------------------
+# 257.689 | 258.087 | 277.996 |            |      0.327 | 0.440 | 1.000 |    0.564 |   -66.789 |           0.014
 round(r2_tjur(mod.prob.mob), digits = 3)     #0.216
 
 #Plot model
@@ -206,28 +206,26 @@ mod.prob.mob <- glmmTMB(mobbing ~ stan.hyena_count + male_lions_present +
                           stan.num_indv_grts + location + male_lions_present:stan.num_indv_grts,
                         data = sessions.food.final, family = binomial(link = 'logit'))
 summary(mod.prob.mob)
-set_theme(base = theme_classic(), axis.textcolor = "black", axis.title.color = "black", 
-          axis.textsize.y = 1.5, axis.textsize.x = 1.2, axis.title.size = 1.7)
-plot.model.intx <- plot_model(mod.prob.mob, type = "est", transform = NULL,
-                              axis.labels = c("Male lions present x Number of greeters",
-                                              "Carcass freshness [FRESH]",
-                                              "Number of hyenas who greet (greeters)",
-                                              "Male lions present [TRUE]", "Number of hyenas present"),
-                              vline.color = "black", title = "", dot.size = 4.5, line.size = 1.5,
-                              show.values = TRUE, show.p = TRUE, digits = 2, value.offset = 0.3, 
-                              value.size = 6, colors = viridis_2)
-pdf('23.plot.occ.food.model.pdf', width = 7, height = 5)
-plot.model.intx
-dev.off()
 
 #Table
-sjPlot::tab_model(mod.prob.mob, show.se = T, show.ci = F, show.re.var = F, show.intercept = F, 
+sjPlot::tab_model(mod.prob.mob, show.se = T, show.ci = 0.95, show.re.var = F, show.intercept = F, 
                   pred.labels = c("Number of hyenas present", "Male lions present [TRUE]", 
                                   "Number of hyenas who greet (greeters)", 
                                   "Carcass freshness [FRESH]",
                                   "Male lions present x Number of greeters"),
                   dv.labels = c("Probability of mobbing participation"), 
-                  string.se = "SE", transform = NULL, file = "23.table_occ_food.doc")
+                  string.se = "SE", transform = "exp", file = "23.table_occ_food.doc")
+
+#Calculate CIs using the likelihood profile
+tidy.mod.prob.mob <- broom.mixed::tidy(mod.prob.mob, conf.method = "profile",
+                                       conf.int = T, conf.level = 0.95, exponentiate = T)
+tidy.mod.prob.mob
+#  effect  component term                                      estimate std.error statistic     p.value conf.low conf.high
+# 2 fixed  cond      stan.hyena_count                             2.31      0.454     4.26  0.0000200    1.60       3.46
+# 3 fixed  cond      male_lions_presentTRUE                       0.522     0.181    -1.87  0.0611       0.261      1.03
+# 4 fixed  cond      stan.num_indv_grts                           1.10      0.226     0.470 0.638        0.744      1.68
+# 5 fixed  cond      locationk                                    0.724     0.305    -0.768 0.443        0.317      1.67
+# 6 fixed  cond      male_lions_presentTRUE:stan.num_indv_grts    2.70      1.19      2.25  0.0246       1.20       6.89
 
 
 ########## 23.5 Probability of mobbing participation - additive ##########
@@ -324,13 +322,12 @@ summary(mod.body)
 # stan.rank           0.72646    0.15664   4.638 3.52e-06 ***
 check_collinearity(mod.body)   #all below 3
 check_model(mod.body)
-binned_residuals(mod.body)
-# Warning: Probably bad model fit. Only about 70% of the residuals are inside the error bounds.
 simulationOutput <- simulateResiduals(fittedModel = mod.body, n = 250)
-plot(simulationOutput)   #KS test: p = 0.78911, Dispersion test: p = 0.44, Outlier test: p = 1
+plot(simulationOutput) 
 model_performance(mod.body)
-# AIC     |     BIC | R2 (cond.) | R2 (marg.) |   ICC |  RMSE | Sigma | Log_loss | 
-# 502.070 | 542.158 |      0.434 |      0.181 | 0.309 | 0.399 | 1.000 |    0.486 |
+# AIC     |    AICc |     BIC | R2 (cond.) | R2 (marg.) |   ICC |  RMSE | Sigma | Log_loss | Score_log | Score_spherical
+# ----------------------------------------------------------------------------------------------------------------------
+# 502.070 | 502.626 | 542.158 |      0.434 |      0.181 | 0.309 | 0.399 | 1.000 |    0.486 |  -191.153 |           0.005
 summary(glht_glmmTMB(mod.body, linfct = mcp(body.cond = "Tukey")))
 #                     Estimate Std. Error z value Pr(>|z|)  
 # fat - normal == 0    0.04427    0.34468   0.128   0.9902  
@@ -441,25 +438,39 @@ summary(mod.body)
 # carc_catxl     -2.63150    1.12703  -2.335  0.01955 *  
 set_theme(base = theme_classic(), axis.textcolor = "black", axis.title.color = "black", 
           axis.textsize.y = 1.5, axis.textsize.x = 1.2, axis.title.size = 1.7)
-plot.model <- plot_model(mod.body, type = "est", transform = NULL,
+plot.model <- plot_model(mod.body, type = "est", transform = "exp",
                          axis.labels = c("Carcass size [xl]", "Carcass size [m]",
                                          "Belly size [obese]", "Belly size [fat]",
                                          "Social rank", "Age^2", "Age"),
                          vline.color = "black", title = "", dot.size = 4.5, line.size = 1.5,
                          show.values = TRUE, show.p = TRUE, digits = 2, value.offset = 0.3, 
-                         value.size = 6, colors = viridis_2, axis.lim = c(-6,6))
+                         value.size = 6, colors = viridis_2, axis.lim = c(0.001,1000))
 pdf('23.plot.body.cond.model.pdf', width = 7, height = 5)
 plot.model
 dev.off()
 
 #Table
-sjPlot::tab_model(mod.body, show.se = T, show.ci = F, show.re.var = F, show.intercept = F, 
+sjPlot::tab_model(mod.body, show.se = T, show.ci = 0.95, show.re.var = F, show.intercept = F, 
                   pred.labels = c("Age", "Age^2", "Social rank",
                                   "Belly size [fat]", "Belly size [obese]", 
                                   "Carcass size [medium]", "Carcass size [extra-large]"),
                   dv.labels = c("Probability of mobbing participation"), 
-                  string.se = "SE", transform = NULL, file = "23.table_body.cond.doc")
+                  string.se = "SE", transform = "exp", file = "23.table_body.cond.doc")
 
+#Calculate CIs using the likelihood profile
+tidy.mod.body <- broom.mixed::tidy(mod.body, conf.method = "profile",
+                                   conf.int = T, conf.level = 0.95, exponentiate = T)
+tidy.mod.body
+#   effect   component group   term            estimate std.error statistic     p.value conf.low conf.high
+# 2 fixed    cond      NA      stan.age          1.57      0.265      2.69   0.00716     1.13       2.21  
+# 3 fixed    cond      NA      stan.age.sq       0.828     0.0731    -2.14   0.0327      0.685      0.975 
+# 4 fixed    cond      NA      stan.rank         2.07      0.324      4.64   0.00000352  1.55       2.89  
+# 5 fixed    cond      NA      body.condfat      1.05      0.360      0.128  0.898       0.530      2.07  
+# 6 fixed    cond      NA      body.condobese    0.0821    0.0928    -2.21   0.0269      0.00676    0.641 
+# 7 fixed    cond      NA      carc_catm         3.05      3.05       1.11   0.265       0.419     24.5   
+# 8 fixed    cond      NA      carc_catxl        0.0720    0.0811    -2.33   0.0195      0.00635    0.630 
+# 9 ran_pars cond      session sd__(Intercept)   1.14     NA         NA     NA          -0.324      0.559 
+# 10 ran_pars cond      hyena   sd__(Intercept)   0.418    NA         NA     NA          NA         -0.0849
 
 
 

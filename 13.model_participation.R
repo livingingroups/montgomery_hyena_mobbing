@@ -14,6 +14,7 @@ library(multcomp)
 library(DHARMa)
 library(see)
 library(performance)
+library(broom.mixed)
 library(viridis)
 library(sjPlot)
 library(patchwork)
@@ -253,13 +254,12 @@ summary(mod.all)
 # sexm                -1.03564    0.16257  -6.370 1.88e-10 ***
 check_collinearity(mod.all)    #all below 3
 check_model(mod.all)
-binned_residuals(mod.all)
-# Warning: Probably bad model fit. Only about 62% of the residuals are inside the error bounds.
 simulationOutput <- simulateResiduals(fittedModel = mod.all, n = 250)
-plot(simulationOutput)   #KS test: p = 0, Dispersion test: p = 0, Outlier test: p = 0.06159
+plot(simulationOutput)
 model_performance(mod.all)
-# AIC      |      BIC | R2 (cond.) | R2 (marg.) |   ICC |  RMSE | Sigma | Log_loss |
-# 4609.329 | 4654.027 |      0.566 |      0.090 | 0.523 | 0.357 | 1.000 |    0.403 |
+# AIC      |     AICc |      BIC | R2 (cond.) | R2 (marg.) |   ICC |  RMSE | Sigma | Log_loss | Score_log | Score_spherical
+# -------------------------------------------------------------------------------------------------------------------------
+# 4609.329 | 4609.354 | 4654.027 |      0.566 |      0.090 | 0.523 | 0.357 | 1.000 |    0.403 |      -Inf |       7.496e-04
 
 ##### Plot models #####
 
@@ -305,24 +305,133 @@ summary(mod.all)
 # stan.age     0.72318    0.08559   8.450  < 2e-16 ***
 # stan.age.sq -0.39626    0.05007  -7.915 2.48e-15 ***
 # sexm        -1.03566    0.16257  -6.371 1.88e-10 ***
+
 set_theme(base = theme_classic(), axis.textcolor = "black", axis.title.color = "black", 
           axis.textsize.y = 1.5, axis.textsize.x = 1.2, axis.title.size = 1.7)
-plot.model <- plot_model(mod.all, type = "est", transform = NULL,
+plot.model <- plot_model(mod.all, type = "est", transform = "exp",
                          axis.labels = c("Sex [male]", "Age^2", "Age"),
                          vline.color = "black", title = "", dot.size = 4.5, line.size = 1.5,
                          show.values = TRUE, show.p = TRUE, digits = 2, value.offset = 0.3, 
-                         value.size = 6, colors = viridis_2, axis.lim = c(-2,2))
+                         value.size = 6, colors = viridis_2, axis.lim = c(0.1,10))
 pdf('13.plot.all.model.pdf', width = 7, height = 5)
 plot.model
 dev.off()
 
 #Table
-sjPlot::tab_model(mod.all, show.se = T, show.ci = F, show.re.var = F, show.intercept = F, 
+sjPlot::tab_model(mod.all, show.se = T, show.ci = .95, show.re.var = F, show.intercept = F, 
                   pred.labels = c("Age", "Age^2", "Sex [male]"),
                   dv.labels = c("Probability of mobbing participation"), 
-                  string.se = "SE", transform = NULL, file = "13.table.all.doc")
+                  string.se = "SE", transform = "exp", file = "13.table.all.doc")
+
+#Calculate CIs using the likelihood profile
+tidy.mod.all <- broom.mixed::tidy(mod.all, conf.method = "profile", 
+                                  conf.int = T, conf.level = 0.95,exponentiate = T)
+tidy.mod.all
+# effect   component group         term            estimate std.error statistic   p.value conf.low conf.high
+# 2 fixed    cond      NA            stan.age           2.06     0.176       8.45  2.92e-17    1.74     2.44  
+# 3 fixed    cond      NA            stan.age.sq        0.673    0.0337     -7.91  2.48e-15    0.609    0.741 
+# 4 fixed    cond      NA            sexm               0.355    0.0577     -6.37  1.88e-10    0.257    0.487 
+# 5 ran_pars cond      mobID:session sd__(Intercept)    0.779   NA          NA    NA          -0.451   -0.0656
+# 6 ran_pars cond      session       sd__(Intercept)    1.41    NA          NA    NA           0.104    0.569 
+# 7 ran_pars cond      hyena         sd__(Intercept)    1.01    NA          NA    NA          -0.169    0.185 
 
 
+########## 13.8 Are females actually different bc of sex, or is it because of dispersal? ##########
+
+##### Create dataset #####
+
+#Filter to natal animals only
+natal.id.by.mob <- filter(id.by.mob, status == "r")
+
+#Standardize model variables
+head(natal.id.by.mob[,c(11,14,15)])
+natal.id.by.mob.all <- filter(natal.id.by.mob, complete.cases(natal.id.by.mob[,c(11,14,15)]))   #n=3818
+natal.id.by.mob.all$stan.age <- as.numeric(scale(natal.id.by.mob.all$age, center = T, scale = T))
+natal.id.by.mob.all$sex <- as.character(natal.id.by.mob.all$sex)
+natal.id.by.mob.all$stan.rank.og <- natal.id.by.mob.all$stan.rank
+natal.id.by.mob.all$stan.rank <- as.numeric(scale(natal.id.by.mob.all$stan.rank.og, center = T, scale = T))
+summary(natal.id.by.mob.all)
+
+##### Global model #####
+
+#Full model
+natal.mod.all <- glmmTMB(mobber ~ sex + poly(stan.age, 2) + stan.rank + 
+                     (1 | session/mobID) + (1 | hyena), 
+                   data = natal.id.by.mob.all, family = binomial(link = 'logit'))
+check_collinearity(natal.mod.all)     #all below 3
+check_model(natal.mod.all)
+
+#Dredge
+options(na.action = "na.fail")
+natal.mod.all <- glmmTMB(mobber ~ sex + poly(stan.age, 2) + stan.rank + 
+                     (1 | session/mobID) + (1 | hyena), 
+                   data = natal.id.by.mob.all, family = binomial(link = 'logit'))
+results.all <- dredge(natal.mod.all)
+get.models(subset(results.all, delta == 0), subset = T)
+# mobber ~ poly(stan.age, 2) + sex + stan.rank + (1 | session/mobID) + (1 | hyena)
+sw(subset(results.all, delta <= 6 & !nested(.)))    
+#                      cond(poly(stan.age, 2)) cond(stan.rank) cond(sex)
+# Sum of weights:      1.00                    1.00            0.92     
+# N containing models:    2                       2               1     
+options(na.action = "na.omit")
+
+
+########## 13.9 Final model - natal animals ##########
+
+head(natal.id.by.mob[,c(11,14,15)])
+natal.id.by.mob.all <- filter(natal.id.by.mob, complete.cases(natal.id.by.mob[,c(11,14,15)]))   #n=3818
+natal.id.by.mob.all$stan.age <- as.numeric(scale(natal.id.by.mob.all$age, center = T, scale = T))
+natal.id.by.mob.all$stan.rank.og <- natal.id.by.mob.all$stan.rank
+natal.id.by.mob.all$stan.rank <- as.numeric(scale(natal.id.by.mob.all$stan.rank.og, center = T, scale = T))
+summary(natal.id.by.mob.all)
+
+##### Best model #####
+
+natal.mod.all <- glmmTMB(mobber ~ poly(stan.age, 2) + sex + stan.rank + (1 | session/mobID) + (1 | hyena), 
+                   data = natal.id.by.mob.all, family = binomial(link = 'logit'))
+summary(natal.mod.all)
+#                     Estimate Std. Error z value Pr(>|z|)    
+# poly(stan.age, 2)1  19.92015    4.45125   4.475 7.63e-06 ***
+# poly(stan.age, 2)2 -45.84720    5.45029  -8.412  < 2e-16 ***
+# sexm                -0.48727    0.18562  -2.625  0.00866 ** 
+# stan.rank            0.26059    0.08132   3.204  0.00135 ** 
+check_collinearity(natal.mod.all)    #all below 3
+check_model(natal.mod.all)
+simulationOutput <- simulateResiduals(fittedModel = natal.mod.all, n = 250)
+plot(simulationOutput)   
+model_performance(natal.mod.all)
+# AIC      |     AICc |      BIC | R2 (cond.) | R2 (marg.) |   ICC |  RMSE | Sigma | Log_loss | Score_log | Score_spherical
+# -------------------------------------------------------------------------------------------------------------------------
+# 4024.776 | 4024.813 | 4074.755 |      0.585 |      0.112 | 0.533 | 0.357 | 1.000 |    0.402 |      -Inf |       9.794e-04
+
+#Make table
+natal.id.by.mob.all$mobber <- as.factor(natal.id.by.mob.all$mobber)
+natal.id.by.mob.all$stan.age.sq <- (natal.id.by.mob.all$stan.age)^2
+natal.mod.all <- glmmTMB(mobber ~ stan.age + stan.age.sq + sex + stan.rank + (1 | session/mobID) + (1 | hyena), 
+                   data = natal.id.by.mob.all, family = binomial(link = 'logit'))
+summary(natal.mod.all)
+#             Estimate Std. Error z value Pr(>|z|)    
+# stan.age     1.07964    0.10661  10.127  < 2e-16 ***
+# stan.age.sq -0.45773    0.05441  -8.412  < 2e-16 ***
+# sexm        -0.48725    0.18562  -2.625  0.00867 ** 
+# stan.rank    0.26059    0.08132   3.204  0.00135 ** 
+sjPlot::tab_model(natal.mod.all, show.se = T, show.ci = .95, show.re.var = F, show.intercept = F, 
+                  pred.labels = c("Age", "Age^2", "Sex [male]", "Social rank"),
+                  dv.labels = c("Probability of mobbing participation"), 
+                  string.se = "SE", transform = "exp", file = "13.table.natal.all.doc")
+
+#Calculate CIs using the likelihood profile
+tidy.natal.mod.all <- broom.mixed::tidy(natal.mod.all, conf.method = "profile", 
+                                        conf.int = T, conf.level = 0.95,exponentiate = T)
+tidy.natal.mod.all
+#   effect   component group         term            estimate std.error statistic   p.value conf.low conf.high
+# 2 fixed    cond      NA            stan.age           2.94     0.314      10.1   4.20e-24    2.39     3.63  
+# 3 fixed    cond      NA            stan.age.sq        0.633    0.0344     -8.41  4.03e-17    0.568    0.703 
+# 4 fixed    cond      NA            sexm               0.614    0.114      -2.62  8.67e- 3    0.424    0.882 
+# 5 fixed    cond      NA            stan.rank          1.30     0.106       3.20  1.35e- 3    1.11     1.53  
+# 6 ran_pars cond      mobID:session sd__(Intercept)    0.813   NA          NA    NA          -0.416   -0.0159
+# 7 ran_pars cond      session       sd__(Intercept)    1.49    NA          NA    NA           0.162    0.625 
+# 8 ran_pars cond      hyena         sd__(Intercept)    0.939   NA          NA    NA          -0.276    0.138 
 
 
 

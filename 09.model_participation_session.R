@@ -13,6 +13,7 @@ library(MuMIn)
 library(DHARMa)
 library(see)
 library(performance)
+library(broom.mixed)
 library(viridis)
 library(patchwork)
 library(sjPlot)
@@ -66,6 +67,16 @@ median(filter(sessions.mob, !is.na(size_mobs_median))$size_mobs_median)     #4
 min(filter(sessions.mob, !is.na(size_mobs_mean))$size_mobs_mean)     #2
 round(max(filter(sessions.mob, !is.na(size_mobs_mean))$size_mobs_mean), dig = 0)     #16
 rm(sessions.mob)
+
+#Number of lions at sessions with and without mobbing
+round(median(filter(sessions.intx, mobbing == F)$total_lions), dig = 0)    #2
+round(mean(filter(sessions.intx, mobbing == F)$total_lions), dig = 1)    #3.4
+min(filter(sessions.intx, mobbing == F)$total_lions)    #1
+max(filter(sessions.intx, mobbing == F)$total_lions)    #20
+round(median(filter(sessions.intx, mobbing == T)$total_lions), dig = 0)    #2
+round(mean(filter(sessions.intx, mobbing == T)$total_lions), dig = 1)    #3.7
+min(filter(sessions.intx, mobbing == T)$total_lions)    #1
+max(filter(sessions.intx, mobbing == T)$total_lions)    #14
 
 
 ########## 9.4 Look at correlated variables ##########
@@ -300,14 +311,14 @@ summary(mod.prob.mob)
 # stan.hyena_count:stan.num_indv_grts       -0.31681    0.16904  -1.874   0.0609 .  
 check_collinearity(mod.prob.mob)     #all below 3
 check_model(mod.prob.mob)
-binned_residuals(mod.prob.mob)
-# Warning: Probably bad model fit. Only about 78% of the residuals are inside the error bounds.
 simulationOutput <- simulateResiduals(fittedModel = mod.prob.mob, n = 250)
-plot(simulationOutput)   #KS test: p = 0.74425, Dispersion test: p = 0.752, Outlier test: p = 1
+plot(simulationOutput)
 model_performance(mod.prob.mob)
-# AIC     |     BIC |  RMSE | Sigma | Log_loss | Score_log | Score_spherical
-# 356.533 | 382.933 | 0.425 | 1.000 |    0.534 |   -87.496 |           0.012
+# AIC     |    AICc |     BIC | R2 (cond.) | R2 (marg.) |  RMSE | Sigma | Log_loss | Score_log | Score_spherical
+# --------------------------------------------------------------------------------------------------------------
+# 356.533 | 356.890 | 382.933 |            |      0.348 | 0.425 | 1.000 |    0.534 |   -87.496 |           0.012
 round(r2_tjur(mod.prob.mob), digits = 3)     #0.261
+
 
 ##### Plot model #####
 
@@ -445,33 +456,46 @@ plots
 dev.off()
 
 #Plot model
-mod.prob.mob <- glmmTMB(mobbing ~ stan.hyena_count + male_lions_present + stan.num_sd_year + 
-                          stan.num_indv_grts + stan.hyena_count:stan.num_indv_grts + 
+mod.prob.mob <- glmmTMB(mobbing ~ stan.hyena_count + male_lions_present + stan.num_sd_year + #rerun to reorder terms
+                          stan.num_indv_grts + stan.hyena_count:stan.num_indv_grts +
                           male_lions_present:stan.num_indv_grts,
                         data = sessions.intx.final, family = binomial(link = 'logit'))
 summary(mod.prob.mob)
 set_theme(base = theme_classic(), axis.textcolor = "black", axis.title.color = "black", 
           axis.textsize.y = 1.5, axis.textsize.x = 1.2, axis.title.size = 1.7)
-plot.model.intx <- plot_model(mod.prob.mob, type = "est", transform = NULL,
+plot.model.intx <- plot_model(mod.prob.mob, type = "est", transform = "exp",
                               axis.labels = c("Male lions present x Number of greeters",
                                               "Number of hyenas present x Number of greeters",
                                               "Number of hyenas who greet (greeters)", "Prey density",
                                               "Male lions present [TRUE]", "Number of hyenas present"),
                               vline.color = "black", title = "", dot.size = 4.5, line.size = 1.5,
                               show.values = TRUE, show.p = TRUE, digits = 2, value.offset = 0.3, 
-                              value.size = 6, colors = viridis_2)
+                              value.size = 6, colors = viridis_2, axis.lim = c(0.1,10))
 pdf('09.plot.session.model.pdf', width = 7, height = 5)
 plot.model.intx
 dev.off()
 
 #Make table
-sjPlot::tab_model(mod.prob.mob, show.intercept = F, show.se = T, show.ci = F, 
+sjPlot::tab_model(mod.prob.mob, show.intercept = F, show.se = T, show.ci = 0.95,
                   pred.labels = c("Number of hyenas present", "Male lions present [TRUE]",
                                   "Prey density", "Number of hyenas who greet (greeters)",
                                   "Number of hyenas present x Number of greeters",
                                   "Male lions present x Number of greeters"),
                   dv.labels = c("Probability of mobbing occurrence"), 
-                  string.se = "SE", transform = NULL, file = "09.table_session.doc")
+                  string.se = "SE", transform = "exp", file = "09.table_session.doc")
+
+#Calculate CIs using the likelihood profile
+tidy.mod.prob.mob <- broom.mixed::tidy(mod.prob.mob, conf.method = "profile", 
+                                       conf.int = T, conf.level = 0.95,exponentiate = T)
+tidy.mod.prob.mob
+#   effect component term                                      estimate std.error statistic     p.value conf.low conf.high
+# 2 fixed  cond      stan.hyena_count                             2.39      0.401     5.20  0.000000202    1.74      3.36 
+# 3 fixed  cond      male_lions_presentTRUE                       0.483     0.143    -2.47  0.0136         0.267     0.854
+# 4 fixed  cond      stan.num_sd_year                             1.32      0.174     2.08  0.0378         1.02      1.71 
+# 5 fixed  cond      stan.num_indv_grts                           1.69      0.373     2.39  0.0167         1.11      2.64 
+# 6 fixed  cond      stan.hyena_count:stan.num_indv_grts          0.728     0.123    -1.87  0.0609         0.527     1.03 
+# 7 fixed  cond      male_lions_presentTRUE:stan.num_indv_grts    1.95      0.686     1.89  0.0588         1.01      4.07 
+
 
 ##### Check plots #####
 
@@ -556,21 +580,29 @@ summary(mod.prob.mob)
 # stan.hyena_count:stan.num_indv_grts -0.40514    0.20433  -1.983 0.047391 *  
 check_collinearity(mod.prob.mob)     #all below 3
 check_model(mod.prob.mob)
-binned_residuals(mod.prob.mob)
-# Ok: About 100% of the residuals are inside the error bounds.
 simulationOutput <- simulateResiduals(fittedModel = mod.prob.mob, n = 250)
-plot(simulationOutput)   #KS test: p = 0.898, Dispersion test: p = 0.848, Outlier test: p = 1
+plot(simulationOutput)   
 model_performance(mod.prob.mob)
-# AIC     |     BIC |  RMSE | Sigma | Log_loss | Score_log | Score_spherical
-# 257.981 | 271.407 | 0.450 | 1.000 |    0.590 |   -68.959 |           0.010
+# AIC     |    AICc |     BIC | R2 (cond.) | R2 (marg.) |  RMSE | Sigma | Log_loss | Score_log | Score_spherical
+# --------------------------------------------------------------------------------------------------------------
+# 257.981 | 258.174 | 271.407 |            |      0.234 | 0.450 | 1.000 |    0.590 |   -68.959 |           0.010
 round(r2_tjur(mod.prob.mob), digits = 3)     #0.188
 
 #Make table
-sjPlot::tab_model(mod.prob.mob, show.se = T, show.ci = F, show.re.var = F, show.intercept = F, 
+sjPlot::tab_model(mod.prob.mob, show.se = T, show.ci = 0.95, show.re.var = F, show.intercept = F, 
                   pred.labels = c("Number of hyenas present", "Number of hyenas who greet (greeters)",
                                   "Number of hyenas present x Number of greeters"),
                   dv.labels = c("Probability of mobbing occurrence"), 
-                  string.se = "SE", transform = NULL, file = "09.table_session_femlions.doc")
+                  string.se = "SE", transform = "exp", file = "09.table_session_femlions.doc")
+
+#Calculate CIs using the likelihood profile
+tidy.mod.prob.mob <- broom.mixed::tidy(mod.prob.mob, conf.method = "profile", 
+                                       conf.int = T, conf.level = 0.95,exponentiate = T)
+tidy.mod.prob.mob
+#   effect component term                                estimate std.error statistic     p.value conf.low conf.high
+# 2 fixed  cond      stan.hyena_count                       1.99      0.385     3.57  0.000361    1.38       2.95
+# 3 fixed  cond      stan.num_indv_grts                     1.93      0.503     2.52  0.0118      1.18       3.29
+# 4 fixed  cond      stan.hyena_count:stan.num_indv_grts    0.667     0.136    -1.98  0.0474      0.447      1.01
 
 
 ########## 9.10 Probability of mobbing - with adult male lions ##########
@@ -657,25 +689,32 @@ summary(mod.prob.mob)
 # stan.num_sd_year     0.6314     0.2456   2.571 0.010138 *  
 check_collinearity(mod.prob.mob)     #all below 3
 check_model(mod.prob.mob)
-binned_residuals(mod.prob.mob)
-# Warning: Probably bad model fit. Only about 64% of the residuals are inside the error bounds.
 simulationOutput <- simulateResiduals(fittedModel = mod.prob.mob, n = 250)
-plot(simulationOutput)   #KS test: p = 0.29871, Dispersion test: p = 0.504, Outlier test: p = 1
+plot(simulationOutput)
 model_performance(mod.prob.mob)
-# AIC     |     BIC |  RMSE | Sigma | Log_loss | Score_log | Score_spherical
-# 103.908 | 114.817 | 0.379 | 1.000 |    0.424 |   -23.634 |           0.047
+# AIC     |    AICc |     BIC | R2 (cond.) | R2 (marg.) |  RMSE | Sigma | Log_loss | Score_log | Score_spherical
+# --------------------------------------------------------------------------------------------------------------
+# 103.908 | 104.278 | 114.817 |            |      0.541 | 0.379 | 1.000 |    0.424 |   -23.634 |           0.047
 round(r2_tjur(mod.prob.mob), digits = 3)     #0.371
 
 #Make table
 mod.prob.mob <- glmmTMB(mobbing ~ stan.hyena_count + stan.num_sd_year + stan.num_indv_grts,
                         data = sessions.intx.male.final, family = binomial(link = 'logit'))
 summary(mod.prob.mob)
-sjPlot::tab_model(mod.prob.mob, show.se = T, show.ci = F, show.re.var = F, show.intercept = F, 
+sjPlot::tab_model(mod.prob.mob, show.se = T, show.ci = .95, show.re.var = F, show.intercept = F, 
                   pred.labels = c("Number of hyenas present", "Prey density", 
                                   "Number of hyenas who greet (greeters)"),
                   dv.labels = c("Probability of mobbing occurrence"), 
-                  string.se = "SE", transform = NULL, file = "09.table_session_malelions.doc")
+                  string.se = "SE", transform = "exp", file = "09.table_session_malelions.doc")
 
+#Calculate CIs using the likelihood profile
+tidy.mod.prob.mob <- broom.mixed::tidy(mod.prob.mob, conf.method = "profile", 
+                                       conf.int = T, conf.level = 0.95, exponentiate = T)
+tidy.mod.prob.mob
+#   effect component term               estimate std.error statistic     p.value conf.low conf.high
+# 2 fixed  cond      stan.hyena_count      3.54      1.22       3.65 0.000259    1.88      7.37 
+# 3 fixed  cond      stan.num_sd_year      1.88      0.462      2.57 0.0101      1.18      3.13 
+# 4 fixed  cond      stan.num_indv_grts    2.53      0.815      2.89 0.00391     1.39      4.96 
 
 
 

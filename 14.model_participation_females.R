@@ -14,6 +14,7 @@ library(multcomp)
 library(DHARMa)
 library(see)
 library(performance)
+library(broom.mixed)
 library(viridis)
 library(sjPlot)
 library(patchwork)
@@ -55,36 +56,36 @@ hist(id.by.mob.fem$mob.ai.avg)
 hist(id.by.mob.fem$present.ai.avg)
 ggpairs(id.by.mob.fem[,c(25,26)])    #highly correlated
 
-mod.prob.mob <- glmmTMB(mobber ~ mob.ai.avg,
+mod.fem <- glmmTMB(mobber ~ mob.ai.avg,
                         data = filter(id.by.mob.fem, !is.na(mob.ai.avg)), family = binomial(link = 'logit'))
-AIC(mod.prob.mob)     #3205.553 - pick this
-mod.prob.mob <- glmmTMB(mobber ~ present.ai.avg,
+AIC(mod.fem)     #3205.553 - pick this
+mod.fem <- glmmTMB(mobber ~ present.ai.avg,
                         data = filter(id.by.mob.fem, !is.na(mob.ai.avg)), family = binomial(link = 'logit'))
-AIC(mod.prob.mob)     #3219.009
+AIC(mod.fem)     #3219.009
 
 #Relatedness measure
 hist(id.by.mob.fem$prop.mob.related)
 hist(id.by.mob.fem$prop.present.related)
 ggpairs(id.by.mob.fem[,c(23,24)])    #highly correlated
 
-mod.prob.mob <- glmmTMB(mobber ~ prop.mob.related,
+mod.fem <- glmmTMB(mobber ~ prop.mob.related,
                         data = filter(id.by.mob.fem, !is.na(prop.mob.related)), family = binomial(link = 'logit'))
-AIC(mod.prob.mob)     #3190.027 - pick this
-mod.prob.mob <- glmmTMB(mobber ~ prop.present.related,
+AIC(mod.fem)     #3190.027 - pick this
+mod.fem <- glmmTMB(mobber ~ prop.present.related,
                         data = filter(id.by.mob.fem, !is.na(prop.mob.related)), family = binomial(link = 'logit'))
-AIC(mod.prob.mob)     #3203.023
+AIC(mod.fem)     #3203.023
 
 #Relative rank measure
 hist(id.by.mob.fem$present.prop.rank.higher)
 hist(id.by.mob.fem$mob.prop.rank.higher)
 ggpairs(id.by.mob.fem[,c(27,28)])    #highly correlated
 
-mod.prob.mob <- glmmTMB(mobber ~ mob.prop.rank.higher,
+mod.fem <- glmmTMB(mobber ~ mob.prop.rank.higher,
                         data = filter(id.by.mob.fem, !is.na(mob.prop.rank.higher)), family = binomial(link = 'logit'))
-AIC(mod.prob.mob)     #3250.546
-mod.prob.mob <- glmmTMB(mobber ~ present.prop.rank.higher,
+AIC(mod.fem)     #3250.546
+mod.fem <- glmmTMB(mobber ~ present.prop.rank.higher,
                         data = filter(id.by.mob.fem, !is.na(mob.prop.rank.higher)), family = binomial(link = 'logit'))
-AIC(mod.prob.mob)     #3217.775 - pick this
+AIC(mod.fem)     #3217.775 - pick this
 
 #Session-level 
 table(id.by.mob.fem$mobber)
@@ -251,13 +252,13 @@ summary(mod.fem)
 # stan.mob.ai.avg:stan.rank   0.21304    0.09463   2.251  0.02437 *  
 check_collinearity(mod.fem)    #all before 3
 check_model(mod.fem)
-binned_residuals(mod.fem)
-# Warning: Probably bad model fit. Only about 56% of the residuals are inside the error bounds.
 simulationOutput <- simulateResiduals(fittedModel = mod.fem, n = 250)
-plot(simulationOutput)   #KS test: p = 0, Dispersion test: p = 0.952, Outlier test: p = 0.47843
+plot(simulationOutput)
 model_performance(mod.fem)
-# AIC      |      BIC | R2 (cond.) | R2 (marg.) |   ICC |  RMSE | Sigma | Log_loss | 
-# 2653.265 | 2722.048 |      0.554 |      0.092 | 0.509 | 0.372 | 1.000 |    0.434 |
+# AIC      |     AICc |      BIC | R2 (cond.) | R2 (marg.) |   ICC |  RMSE | Sigma | Log_loss | Score_log | Score_spherical
+# -------------------------------------------------------------------------------------------------------------------------
+# 2653.265 | 2653.402 | 2722.048 |      0.554 |      0.092 | 0.509 | 0.372 | 1.000 |    0.434 |      -Inf |       5.883e-04
+
 
 ##### Plot models #####
 
@@ -442,27 +443,40 @@ summary(mod.fem)
 # stan.rank:stan.mob.ai.avg  0.21304    0.09463   2.251  0.02437 *  
 set_theme(base = theme_classic(), axis.textcolor = "black", axis.title.color = "black", 
             axis.textsize.y = 1.5, axis.textsize.x = 1.2, axis.title.size = 1.7)
-plot.model <- plot_model(mod.fem, type = "est", transform = NULL,
+plot.model <- plot_model(mod.fem, type = "est", transform = "exp",
                          axis.labels = c("Association index x Social rank", "Greeted x Social rank",
                                          "Maternal relatedness (participants)", "Association index (participants)",
                                          "Greeted [TRUE]", "Social rank", "Age^2", "Age"),
                          vline.color = "black", title = "", dot.size = 4.5, line.size = 1.5,
                          show.values = TRUE, show.p = TRUE, digits = 2, value.offset = 0.3, 
-                         value.size = 6, colors = viridis_2, axis.lim = c(-2,2))
+                         value.size = 6, colors = viridis_2, axis.lim = c(0.1,10))
 pdf('14.plot.fem.model.pdf', width = 7, height = 7.5)
 plot.model
 dev.off()
 
 #Table
-sjPlot::tab_model(mod.fem, show.se = T, show.ci = F, show.re.var = F, show.intercept = F, 
+sjPlot::tab_model(mod.fem, show.se = T, show.ci = 0.95, show.re.var = F, show.intercept = F, 
                   pred.labels = c("Age", "Age^2", "Social rank", "Greeted [TRUE]", 
                                   "Association index (participants)", "Maternal relatedness (participants)",
                                   "Greeted x Social rank", "Association index x Social rank"),
                   dv.labels = c("Probability of mobbing participation"), 
-                  string.se = "SE", transform = NULL, file = "14.table_fem.doc")
+                  string.se = "SE", transform = "exp", file = "14.table_fem.doc")
 
-
-
-
+#Calculate CIs using the likelihood profile
+tidy.mod.fem <- broom.mixed::tidy(mod.fem, conf.method = "profile",
+                                  conf.int = T, conf.level = 0.95, exponentiate = T)
+tidy.mod.fem
+#   effect   component group         term                      estimate std.error statistic     p.value conf.low conf.high
+# 2 fixed    cond      NA            stan.age                     1.09     0.109      0.824  0.410        0.890      1.32 
+# 3 fixed    cond      NA            stan.age.sq                  0.878    0.0465    -2.46   0.0137       0.786      0.969
+# 4 fixed    cond      NA            stan.rank                    1.18     0.123      1.58   0.113        0.962      1.45 
+# 5 fixed    cond      NA            grt_occTRUE                  3.21     0.807      4.64   0.00000348   1.97       5.30 
+# 6 fixed    cond      NA            stan.mob.ai.avg              1.47     0.197      2.89   0.00383      1.13       1.92 
+# 7 fixed    cond      NA            stan.prop.mob.related        1.26     0.115      2.49   0.0128       1.05       1.50 
+# 8 fixed    cond      NA            stan.rank:grt_occTRUE        0.474    0.135     -2.61   0.00900      0.268      0.824
+# 9 fixed    cond      NA            stan.rank:stan.mob.ai.avg    1.24     0.117      2.25   0.0244       1.03       1.50 
+# 10 ran_pars cond      mobID:session sd__(Intercept)              0.970   NA         NA     NA           -0.252      0.173
+# 11 ran_pars cond      session       sd__(Intercept)              1.42    NA         NA     NA            0.0704     0.619
+# 12 ran_pars cond      hyena         sd__(Intercept)              0.667   NA         NA     NA           -0.755     -0.111
 
 

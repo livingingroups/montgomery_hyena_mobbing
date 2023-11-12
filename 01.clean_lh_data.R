@@ -23,7 +23,7 @@ tblHyenas$sex <- as.factor(tblHyenas$sex)
 tblHyenas$status <- as.factor(tblHyenas$status)
 tblHyenas$number_littermates <- as.numeric(tblHyenas$number_littermates)
 tblHyenas$litrank <- as.numeric(tblHyenas$litrank)
-tblHyenas <- tblHyenas[,c(1,4,7:13,15)]
+tblHyenas <- tblHyenas[,c(1,4,7:13,15)].    #drop unnecessary columns
 tblHyenas <- filter(tblHyenas, !is.na(id))  
 tblHyenas <- unique(tblHyenas)
 
@@ -105,7 +105,7 @@ sessions.lh.be <- filter(sessions.lh.be, session %in% tblHyenasPerSession$sessio
 sessions.lh.be <- filter(sessions.lh.be, seen == TRUE)     #filter to visible (not tracked) hyenas
 sessions.lh.be <- left_join(sessions.lh.be, tblPredatorsPerSession, by = "session")
 sessions.lh.be <- filter(sessions.lh.be, predator == "lion")     #filter to sessions with lions
-sessions.lh.be <- filter(sessions.lh.be, date < "2017-01-01")    #filter to sessions in <= 2016
+sessions.lh.be <- filter(sessions.lh.be, date < "2017-01-01")    #filter to sessions prior to end of study (2016)
 sessions.lh.be <- unique(sessions.lh.be[,c(1:13,18)])     #1009
 
 
@@ -177,13 +177,13 @@ rm(problems.tblLionHyenaSessions0)
 lh.sessions.good <- filter(lh.sessions, no_intx_yes_no == FALSE & note_quality > 1)   #343 sessions
 lh.sessions.good <- left_join(lh.sessions.good, unique(tblPredatorsPerSession[,c(1,7)]), 
                               by = c("Session" = "session"))
-problems.tblLionHyenaSessions1 <- filter(lh.sessions.good, is.na(hyena_count) | hyena_count < 1)   #0 sessions
+problems.tblLionHyenaSessions1 <- filter(lh.sessions.good, is.na(hyena_count) | hyena_count < 1)   #no hyenas  #0 sessions
 problems.tblLionHyenaSessions1$TMMnotes <- "hyena_count is NA"
-problems.tblLionHyenaSessions2 <- filter(lh.sessions.good, is.na(lion_count) | lion_count < 1)   #1 session - okay
+problems.tblLionHyenaSessions2 <- filter(lh.sessions.good, is.na(lion_count) | lion_count < 1)   #no lions  #1 session - okay
 problems.tblLionHyenaSessions2$TMMnotes <- "lion_count is NA"
 problems.tblLionHyenaSessions <- left_join(lh.sessions.good, tblSessions[,2:6], 
                                            by = c("Session" = "session"))
-problems.tblLionHyenaSessions3 <- filter(problems.tblLionHyenaSessions, food_present == TRUE, 
+problems.tblLionHyenaSessions3 <- filter(problems.tblLionHyenaSessions, food_present == TRUE,   #food present is inconsistent with other fields
                                          location != "c", location != "k", 
                                          location != "d", location != "n")
 problems.tblLionHyenaSessions3 <- problems.tblLionHyenaSessions3[,1:14]    #0 sessions
@@ -198,7 +198,7 @@ problems.tblLionHyenaSessions5 <- filter(lh.sessions.good, food_present == FALSE
 problems.tblLionHyenaSessions5$TMMnotes <- "check food_present and who starts/ends with food"
 problems.tblLionHyenaSessions6 <- filter(lh.sessions.good, food_present == TRUE, is.na(do_hyenas_eat))   #0 sessions
 problems.tblLionHyenaSessions6$TMMnotes <- "check food present and do hyenas eat"
-problems.tblLionHyenaSessions7 <- filter(lh.sessions.good, lion_count != total_lions | is.na(total_lions))     #0 sessions
+problems.tblLionHyenaSessions7 <- filter(lh.sessions.good, lion_count != total_lions | is.na(total_lions))     #lion count is inconsistent   #0 sessions
 problems.tblLionHyenaSessions7$TMMnotes <- "check lion_count"
 
 problems.tblLionHyenaSessions <- rbind(problems.tblLionHyenaSessions1, problems.tblLionHyenaSessions2, 
@@ -702,15 +702,6 @@ problems.tblLionHyenaIndvBehav <- rbind(problems1.tblLionHyenaIndvBehav, problem
                                         problems5.tblLionHyenaIndvBehav, problems6.tblLionHyenaIndvBehav, 
                                         problems7.tblLionHyenaIndvBehav, problems8.tblLionHyenaIndvBehav, 
                                         problems9.tblLionHyenaIndvBehav)
-# for(s in unique(problems.tblLionHyenaIndvBehav$Session)){
-#   for(i in unique(filter(problems.tblLionHyenaIndvBehav, Session ==s)$ID)){
-#     problems.tblLionHyenaIndvBehav[problems.tblLionHyenaIndvBehav$Session == s &
-#                                      problems.tblLionHyenaIndvBehav$ID == i,]$TMMnotes <-
-#       filter(problems.tblLionHyenaIndvBehav, Session == s & ID == i) %>%
-#       pull(TMMnotes) %>%
-#       paste(collapse = '; ')
-#   }
-# }
 problems.tblLionHyenaIndvBehav <- unique(problems.tblLionHyenaIndvBehav)     #0
 # write.csv(problems.tblLionHyenaIndvBehav, "problems.tblLionHyenaIndvBehav.csv", na = "", row.names = FALSE)
 rm(problems1.tblLionHyenaIndvBehav)

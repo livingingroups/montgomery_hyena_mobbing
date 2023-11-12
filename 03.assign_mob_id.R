@@ -110,7 +110,7 @@ lh.indvbehav$counted <- NA
 lh.intx$time <- as.character(lh.intx$time)
 lh.indvbehav$Time <- as.character(lh.indvbehav$Time)
 
-# Fix hyena list in lh.intx so that there are the commas are correct and standardized.
+# Fix hyena list in lh.intx so that the commas are correct and standardized.
 lh.intx$hyena_list <- as.character(lh.intx$hyena_list)
 
 for (i in 1:(length(lh.intx$session))) {
@@ -149,7 +149,7 @@ countsessions <- subset(lh.intx, mobID=="There are no mobs at this session and t
 
 
 #     3.2 - Assign mobID to lh.indvbehav
-# Create standardised order number from the intx dataset's Notes column.
+# Create standardized order number from the intx dataset's Notes column.
 lh.intx$order <- NA
 
 for (i in 1:length(lh.intx$id)) {
